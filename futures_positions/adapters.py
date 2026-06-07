@@ -5,7 +5,7 @@ import logging
 import re
 import time
 from datetime import date
-from io import StringIO
+from io import BytesIO, StringIO
 from xml.etree import ElementTree
 
 import pandas as pd
@@ -34,28 +34,6 @@ def ranked_shfe_rows(payload: dict) -> list[dict]:
     ]
 
 CFFEX_PRODUCTS = ["IF", "IC", "IM", "IH", "TS", "TF", "T", "TL", "IO", "MO", "HO"]
-SHFE_PRODUCTS = [
-    "CU",
-    "AL",
-    "ZN",
-    "PB",
-    "NI",
-    "SN",
-    "AU",
-    "AG",
-    "RB",
-    "WR",
-    "HC",
-    "FU",
-    "BU",
-    "RU",
-    "SP",
-    "SS",
-    "AO",
-    "BR",
-]
-INE_PRODUCTS = ["SC", "NR", "LU", "BC", "EC"]
-
 
 class BaseAdapter:
     exchange = ""
@@ -105,84 +83,16 @@ class BaseAdapter:
                 )
         return records
 
-    def _records_from_standard_frames(
-        self,
-        trade_date: date,
-        tables: dict[str, pd.DataFrame],
-        source_url: str,
-    ) -> list[dict]:
-        records = []
-        at = fetched_at()
-        for table_name, df in tables.items():
-            if df is None or df.empty:
-                continue
-            for _, row in df.iterrows():
-                product = clean_text(row.get("variety") or row.get("var") or row.get("product"))
-                contract = clean_text(row.get("symbol") or table_name)
-                rank = clean_number(row.get("rank"))
-                metric_specs = [
-                    ("volume", "vol_party_name", "vol", "vol_chg"),
-                    ("long", "long_party_name", "long_open_interest", "long_open_interest_chg"),
-                    ("short", "short_party_name", "short_open_interest", "short_open_interest_chg"),
-                ]
-                for metric, member_col, value_col, change_col in metric_specs:
-                    member = clean_text(row.get(member_col))
-                    value = clean_number(row.get(value_col))
-                    change = clean_number(row.get(change_col))
-                    if not member and value is None:
-                        continue
-                    records.append(
-                        {
-                            "trade_date": trade_date.isoformat(),
-                            "exchange": self.exchange,
-                            "product": product,
-                            "contract": contract,
-                            "rank": rank,
-                            "metric": metric,
-                            "member": member,
-                            "value": value,
-                            "change": change,
-                            "source_url": source_url,
-                            "fetched_at": at,
-                        }
-                    )
-        return records
-
-
-class AkShareMixin:
-    def _require_akshare(self):
-        try:
-            import akshare as ak
-        except ImportError as exc:
-            raise RuntimeError("未安装 akshare，请先运行 pip install -r requirements.txt") from exc
-        return ak
-
-    def _date(self, trade_date: date) -> str:
-        return yyyymmdd(trade_date)
-
 
 class SHFEAdapter(BaseAdapter):
     exchange = "SHFE"
     base_url = "https://www.shfe.com.cn/data/tradedata/future/dailydata/pm{date}.dat"
 
     def fetch(self, trade_date: date, s: requests.Session) -> ExchangeData:
-        try:
-            return self.fetch_official(trade_date, s)
-        except (requests.RequestException, json.JSONDecodeError, ValueError, KeyError) as exc:
-            # Official endpoint failed (network/HTTP/parse error). Fall back to
-            # the akshare mirror, but keep the original error visible if akshare
-            # also fails so the root cause is not silently swallowed.
-            logger.warning(
-                "SHFE official fetch failed for %s (%s: %s); trying akshare fallback",
-                yyyymmdd(trade_date), type(exc).__name__, exc,
-            )
-            try:
-                return self._fetch_akshare(trade_date)
-            except Exception:
-                raise RuntimeError(
-                    f"SHFE fetch failed for {yyyymmdd(trade_date)}: both official "
-                    f"and akshare sources failed"
-                ) from exc
+        # Official exchange endpoint is the ONLY source for member positions.
+        # No third-party mirror (e.g. akshare) is used so the data lineage is
+        # always the exchange itself; failures propagate to the caller.
+        return self.fetch_official(trade_date, s)
 
     def fetch_official(self, trade_date: date, s: requests.Session) -> ExchangeData:
         url = self.base_url.format(date=yyyymmdd(trade_date))
@@ -193,40 +103,20 @@ class SHFEAdapter(BaseAdapter):
         raw = pd.DataFrame(rows)
         return ExchangeData(self.exchange, pd.DataFrame(records), {"raw": raw}, [url])
 
-    def _fetch_akshare(self, trade_date: date) -> ExchangeData:
-        ak = AkShareMixin()._require_akshare()
-        tables = ak.get_shfe_rank_table(date=yyyymmdd(trade_date), vars_list=SHFE_PRODUCTS)
-        records = self._records_from_standard_frames(
-            trade_date,
-            tables,
-            "akshare:get_shfe_rank_table",
-        )
-        return ExchangeData(self.exchange, pd.DataFrame(records), tables, ["akshare:get_shfe_rank_table"])
-
 
 class INEAdapter(SHFEAdapter):
     exchange = "INE"
     base_url = "https://www.ine.cn/data/dailydata/kx/pm{date}.dat"
 
-    def _fetch_akshare(self, trade_date: date) -> ExchangeData:
-        ak = AkShareMixin()._require_akshare()
-        tables = ak.get_shfe_rank_table(date=yyyymmdd(trade_date), vars_list=INE_PRODUCTS)
-        records = self._records_from_standard_frames(
-            trade_date,
-            tables,
-            "akshare:get_shfe_rank_table:ine_products",
-        )
-        return ExchangeData(self.exchange, pd.DataFrame(records), tables, ["akshare:get_shfe_rank_table"])
+    # Inherits SHFEAdapter.fetch / fetch_official, which pull the .dat JSON
+    # straight from the INE official endpoint. No third-party mirror.
 
 
 class DCEAdapter(BaseAdapter):
     exchange = "DCE"
 
     def fetch(self, trade_date: date, s: requests.Session) -> ExchangeData:
-        try:
-            return self._fetch_akshare(trade_date)
-        except Exception:
-            pass
+        # Official DCE export endpoint is the ONLY source for member positions.
         url = (
             "http://www.dce.com.cn/publicweb/quotesdata/exportMemberDealPosiQuotesBatchData.html"
             f"?memberDealPosiQuotes.variety=all&memberDealPosiQuotes.trade_type=0"
@@ -236,16 +126,6 @@ class DCEAdapter(BaseAdapter):
         raw = self._read_text_table(text)
         records = self._normalize_wide_table(trade_date, raw, url)
         return ExchangeData(self.exchange, pd.DataFrame(records), {"raw": raw}, [url])
-
-    def _fetch_akshare(self, trade_date: date) -> ExchangeData:
-        ak = AkShareMixin()._require_akshare()
-        tables = ak.futures_dce_position_rank(date=yyyymmdd(trade_date))
-        records = self._records_from_standard_frames(
-            trade_date,
-            tables,
-            "akshare:futures_dce_position_rank",
-        )
-        return ExchangeData(self.exchange, pd.DataFrame(records), tables, ["akshare:futures_dce_position_rank"])
 
     def _read_text_table(self, text: str) -> pd.DataFrame:
         lines = [line for line in text.splitlines() if line.strip()]
@@ -263,37 +143,30 @@ class CZCEAdapter(BaseAdapter):
     exchange = "CZCE"
 
     def fetch(self, trade_date: date, s: requests.Session) -> ExchangeData:
-        try:
-            return self._fetch_akshare(trade_date)
-        except Exception:
-            pass
+        # Official CZCE position-rank file is the ONLY source.
+        # CZCE publishes FutureDataHolding.xlsx per trading day under
+        # http://www.czce.com.cn/cn/DFSStaticFiles/Future/{year}/{YYYYMMDD}/.
+        # NOTE: must use http (https returns 412) and the .xlsx extension
+        # (not .htm/.txt, which 404). The xlsx uses an embedded header row
+        # (名次/会员简称/交易量/.../持买仓量/.../持卖仓量/...) so we parse it
+        # directly and feed the flat rows to the shared Chinese-table normalizer.
         d = yyyymmdd(trade_date)
+        # 2025-11-01 onward CZCE switched .xls -> .xlsx; try both for safety.
         candidates = [
-            f"https://www.czce.com.cn/cn/DFSStaticFiles/Future/{trade_date.year}/{d}/FutureDataHolding.htm",
-            f"http://www.czce.com.cn/cn/DFSStaticFiles/Future/{trade_date.year}/{d}/FutureDataHolding.htm",
-            f"https://www.czce.com.cn/cn/DFSStaticFiles/Future/{trade_date.year}/{d}/FutureDataHolding.txt",
+            f"http://www.czce.com.cn/cn/DFSStaticFiles/Future/{trade_date.year}/{d}/FutureDataHolding.xlsx",
+            f"http://www.czce.com.cn/cn/DFSStaticFiles/Future/{trade_date.year}/{d}/FutureDataHolding.xls",
         ]
-        last_error = None
+        last_error: Exception | None = None
         for url in candidates:
             try:
-                text = get_text(s, url, encoding="gbk")
-                tables = pd.read_html(StringIO(text))
-                raw = pd.concat([flatten_columns(t) for t in tables], ignore_index=True)
+                resp = s.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+                resp.raise_for_status()
+                raw = pd.read_excel(BytesIO(resp.content), header=None)
                 records = normalize_chinese_rank_table(self.exchange, trade_date, raw, url)
                 return ExchangeData(self.exchange, pd.DataFrame(records), {"raw": raw}, [url])
             except Exception as exc:
                 last_error = exc
         raise RuntimeError(f"CZCE 数据下载失败: {last_error}")
-
-    def _fetch_akshare(self, trade_date: date) -> ExchangeData:
-        ak = AkShareMixin()._require_akshare()
-        tables = ak.get_rank_table_czce(date=yyyymmdd(trade_date))
-        records = self._records_from_standard_frames(
-            trade_date,
-            tables,
-            "akshare:get_rank_table_czce",
-        )
-        return ExchangeData(self.exchange, pd.DataFrame(records), tables, ["akshare:get_rank_table_czce"])
 
 
 class CFFEXAdapter(BaseAdapter):
