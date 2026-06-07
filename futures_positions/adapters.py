@@ -157,13 +157,14 @@ class CZCEAdapter(BaseAdapter):
             f"http://www.czce.com.cn/cn/DFSStaticFiles/Future/{trade_date.year}/{d}/FutureDataHolding.xls",
         ]
         last_error: Exception | None = None
+        from .market_data import parse_czce_holding_xlsx
         for url in candidates:
             try:
                 resp = s.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
                 resp.raise_for_status()
                 raw = pd.read_excel(BytesIO(resp.content), header=None)
-                records = normalize_chinese_rank_table(self.exchange, trade_date, raw, url)
-                return ExchangeData(self.exchange, pd.DataFrame(records), {"raw": raw}, [url])
+                normalized = parse_czce_holding_xlsx(raw, trade_date, url)
+                return ExchangeData(self.exchange, normalized, {"raw": raw}, [url])
             except Exception as exc:
                 last_error = exc
         raise RuntimeError(f"CZCE 数据下载失败: {last_error}")

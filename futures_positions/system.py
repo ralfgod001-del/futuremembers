@@ -17,9 +17,15 @@ import requests
 
 import pandas as pd
 
-from .adapters import CFFEXAdapter, SHFEAdapter
+from .adapters import CFFEXAdapter, CZCEAdapter, SHFEAdapter
 from .database import PositionsDatabase
-from .market_data import build_cffex_settlement_frame, fetch_cffex_daily_market, fetch_daily_market
+from .market_data import (
+    build_cffex_settlement_frame,
+    build_czce_settlement_frame,
+    fetch_cffex_daily_market,
+    fetch_czce_daily_market,
+    fetch_daily_market,
+)
 from .reports import (
     DEEPSEEK_DEFAULT_MODEL,
     build_ai_prompt,
@@ -303,7 +309,7 @@ def update_incremental(
     if adapter is not None and adapters is None:
         adapters = [adapter]
     elif adapters is None:
-        adapters = [SHFEAdapter(), CFFEXAdapter()]
+        adapters = [SHFEAdapter(), CFFEXAdapter(), CZCEAdapter()]
     http = http or session(timeout)
     result = {
         "missing": 0,
@@ -402,6 +408,8 @@ def update_market_incremental(
     fetcher=fetch_daily_market,
     fetch_cffex=fetch_cffex_daily_market,
     include_cffex: bool = True,
+    fetch_czce=fetch_czce_daily_market,
+    include_czce: bool = True,
 ) -> dict:
     """Incrementally fetch daily market+settlement for SHFE, then CFFEX rtj.
 
@@ -420,7 +428,7 @@ def update_market_incremental(
         "errors": 0,
         "market_rows": 0,
         "settlement_rows": 0,
-        "per_exchange": {"SHFE": {}, "CFFEX": {}},
+        "per_exchange": {"SHFE": {}, "CFFEX": {}, "CZCE": {}},
     }
 
     # SHFE missing list — uses the original sync_status-aware query.
@@ -547,6 +555,68 @@ def update_market_incremental(
         result["errors"] += cffex_stat["errors"]
         result["market_rows"] += cffex_stat["market_rows"]
     result["per_exchange"]["CFFEX"] = cffex_stat
+
+    # ---------- CZCE half ----------
+    czce_stat = {"downloaded": 0, "no_data": 0, "errors": 0, "market_rows": 0, "settlement_rows": 0}
+    if include_czce:
+        missing_czce = database.missing_market_days_for_exchange(
+            start_date, end_date, exchange="CZCE", trading_days=calendar
+        )
+        result["per_exchange"]["CZCE"] = {
+            "missing": len(missing_czce),
+            "downloaded": 0, "no_data": 0, "errors": 0, "market_rows": 0, "settlement_rows": 0,
+        }
+        result["missing"] += len(missing_czce)
+        for trade_date in missing_czce:
+            try:
+                market, url = fetch_czce(trade_date, http)
+                if market.empty:
+                    database.mark_market_sync(
+                        trade_date, "no_data", message="CZCE daily xlsx empty",
+                        source_url=url, exchange="CZCE",
+                    )
+                    czce_stat["no_data"] += 1
+                else:
+                    # CZCE xlsx has no margin feed; synthesize from default rates.
+                    settlement = build_czce_settlement_frame(market, source_url=url)
+                    counts = database.upsert_market_day(market, settlement, replace_trade_date=True)
+                    database.mark_market_sync(
+                        trade_date, "ok", market_rows=counts["market_rows"],
+                        settlement_rows=counts.get("settlement_rows", 0),
+                        source_url=url, exchange="CZCE",
+                    )
+                    czce_stat["downloaded"] += 1
+                    czce_stat["market_rows"] += counts["market_rows"]
+                    czce_stat["settlement_rows"] += counts.get("settlement_rows", 0)
+            except requests.HTTPError as exc:
+                status_code = exc.response.status_code if exc.response is not None else None
+                if status_code == 404:
+                    database.mark_market_sync(
+                        trade_date, "no_data", message="CZCE xlsx 404", exchange="CZCE",
+                    )
+                    czce_stat["no_data"] += 1
+                else:
+                    database.mark_market_sync(
+                        trade_date, "error", message=f"HTTP {status_code}: {exc}", exchange="CZCE",
+                    )
+                    czce_stat["errors"] += 1
+            except Exception as exc:
+                logger.warning(
+                    "CZCE market fetch failed for %s: %s",
+                    trade_date.isoformat(), exc, exc_info=True,
+                )
+                database.mark_market_sync(
+                    trade_date, "error", message=f"{type(exc).__name__}: {exc}", exchange="CZCE",
+                )
+                czce_stat["errors"] += 1
+            # CZCE rate-limit: >=1s between requests.
+            time.sleep(max(1.0, pause_seconds))
+        result["downloaded"] += czce_stat["downloaded"]
+        result["no_data"] += czce_stat["no_data"]
+        result["errors"] += czce_stat["errors"]
+        result["market_rows"] += czce_stat["market_rows"]
+        result["settlement_rows"] += czce_stat["settlement_rows"]
+    result["per_exchange"]["CZCE"] = czce_stat
     return result
 
 
