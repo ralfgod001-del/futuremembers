@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>量化工作台</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-row">
+        <div>
+          <h1>期货量化工作台</h1>
+          <p id="connection-state">就绪</p>
+        </div>
+        <button class="icon-only" id="refresh-button" title="刷新">
+          <i data-lucide="refresh-ccw"></i>
+        </button>
+      </div>
+
+      <nav class="workflow-nav" aria-label="工作区导航">
+        <button class="nav-button" data-scroll-target="market-panel">
+          <i data-lucide="candlestick-chart"></i><span>行情</span>
+        </button>
+        <button class="nav-button" data-scroll-target="backtest-panel">
+          <i data-lucide="bar-chart-3"></i><span>回测</span>
+        </button>
+        <button class="nav-button" data-scroll-target="result-panel">
+          <i data-lucide="table-2"></i><span>结果</span>
+        </button>
+        <button class="nav-button" data-scroll-target="monitor-panel">
+          <i data-lucide="activity"></i><span>监控</span>
+        </button>
+      </nav>
+
+      <section class="workflow-section akshare-controls">
+        <div class="step-heading">
+          <span class="step-badge">1</span>
+          <div>
+            <div class="section-title">选择合约</div>
+            <strong>历史行情</strong>
+          </div>
+        </div>
+        <label for="akshare-symbol-input">合约代码</label>
+        <input id="akshare-symbol-input" value="RB0">
+        <div class="two-col-fields">
+          <div>
+            <label for="akshare-start-input">开始日期</label>
+            <input id="akshare-start-input" type="date" value="2024-01-01">
+          </div>
+          <div>
+            <label for="akshare-end-input">结束日期</label>
+            <input id="akshare-end-input" type="date" value="2024-12-31">
+          </div>
+        </div>
+        <label for="akshare-period-select">K线周期</label>
+        <select id="akshare-period-select">
+          <option value="daily">日线</option>
+          <option value="weekly">周线</option>
+          <option value="monthly">月线</option>
+        </select>
+        <details class="advanced-toggle">
+          <summary>数据源参数</summary>
+          <div class="two-col-fields">
+            <div>
+              <label for="akshare-api-select">数据接口</label>
+              <select id="akshare-api-select">
+                <option value="futures_zh_daily_sina">新浪日线</option>
+                <option value="futures_main_sina">新浪主连</option>
+                <option value="futures_hist_em">东方财富历史</option>
+                <option value="get_futures_daily">交易所日线</option>
+              </select>
+            </div>
+            <div>
+              <label for="akshare-output-symbol-input">显示名称</label>
+              <input id="akshare-output-symbol-input" value="RB0">
+            </div>
+          </div>
+          <div class="two-col-fields">
+            <div>
+              <label for="akshare-market-input">市场</label>
+              <input id="akshare-market-input" value="SHFE">
+            </div>
+            <div>
+              <label for="akshare-variety-input">品种</label>
+              <input id="akshare-variety-input" placeholder="RB">
+            </div>
+          </div>
+          <label for="akshare-exchange-input">交易所</label>
+          <input id="akshare-exchange-input" value="SHFE">
+        </details>
+      </section>
+
+      <section class="workflow-section watchlist-section">
+        <div class="step-heading">
+          <span class="step-badge">2</span>
+          <div>
+            <div class="section-title">自选列表</div>
+            <strong>常用合约</strong>
+          </div>
+        </div>
+        <div class="watch-controls">
+          <input id="watch-symbol-input" value="RB0" aria-label="自选合约">
+          <button class="icon-only" id="add-watch-symbol-button" title="添加自选">
+            <i data-lucide="plus"></i>
+          </button>
+        </div>
+        <div class="watchlist" id="watchlist"></div>
+      </section>
+
+      <section class="workflow-section strategy-controls">
+        <div class="step-heading">
+          <span class="step-badge">3</span>
+          <div>
+            <div class="section-title">策略回测</div>
+            <strong>均线策略</strong>
+          </div>
+        </div>
+        <div class="two-col-fields">
+          <div>
+            <label for="akshare-fast-input">快线</label>
+            <input id="akshare-fast-input" type="number" min="1" value="5">
+          </div>
+          <div>
+            <label for="akshare-slow-input">慢线</label>
+            <input id="akshare-slow-input" type="number" min="2" value="20">
+          </div>
+        </div>
+        <div class="two-col-fields">
+          <div>
+            <label for="akshare-cash-input">初始资金</label>
+            <input id="akshare-cash-input" type="number" min="1" value="100000">
+          </div>
+          <div>
+            <label for="akshare-quantity-input">每次手数</label>
+            <input id="akshare-quantity-input" type="number" min="1" value="1">
+          </div>
+        </div>
+        <details class="advanced-toggle">
+          <summary>合约与费用</summary>
+          <div class="two-col-fields">
+            <div>
+              <label for="akshare-multiplier-input">合约乘数</label>
+              <input id="akshare-multiplier-input" type="number" min="1" value="10">
+            </div>
+            <div>
+              <label for="akshare-margin-input">保证金率</label>
+              <input id="akshare-margin-input" type="number" min="0" step="0.01" value="0.12">
+            </div>
+          </div>
+          <div class="two-col-fields">
+            <div>
+              <label for="akshare-commission-input">手续费率</label>
+              <input id="akshare-commission-input" type="number" min="0" step="0.0001" value="0">
+            </div>
+            <div>
+              <label for="akshare-slippage-input">滑点</label>
+              <input id="akshare-slippage-input" type="number" min="0" step="0.1" value="0">
+            </div>
+          </div>
+        </details>
+        <button class="primary-button full-width" id="run-akshare-button">
+          <i data-lucide="play"></i><span>运行 AkShare 回测</span>
+        </button>
+      </section>
+
+      <section class="workflow-section config-run-section">
+        <div class="step-heading">
+          <span class="step-badge muted">4</span>
+          <div>
+            <div class="section-title">配置文件</div>
+            <strong>高级运行</strong>
+          </div>
+        </div>
+        <label for="config-select">配置</label>
+        <select id="config-select"></select>
+        <label>运行模式</label>
+        <div class="segmented" role="tablist" aria-label="运行模式">
+          <button class="segment active" data-mode="backtest">
+            <i data-lucide="line-chart"></i><span>回测</span>
+          </button>
+          <button class="segment" data-mode="replay">
+            <i data-lucide="radio"></i><span>回放</span>
+          </button>
+          <button class="segment" data-mode="paper">
+            <i data-lucide="receipt-text"></i><span>模拟</span>
+          </button>
+          <button class="segment" data-mode="optimize">
+            <i data-lucide="sliders-horizontal"></i><span>优化</span>
+          </button>
+        </div>
+        <label for="max-steps-input">步数</label>
+        <input id="max-steps-input" type="number" min="1" placeholder="全部">
+        <div class="actions side-actions">
+          <button class="secondary-button" id="run-button">
+            <i data-lucide="play-circle"></i><span>运行配置</span>
+          </button>
+          <button class="secondary-button" id="open-report-button" disabled>
+            <i data-lucide="external-link"></i><span>报告</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="workflow-section indicator-controls">
+        <div class="step-heading">
+          <span class="step-badge muted">5</span>
+          <div>
+            <div class="section-title">K线指标</div>
+            <strong>均线显示</strong>
+          </div>
+        </div>
+        <div class="ma-control-row">
+          <div class="check-row">
+            <label for="ma-fast-enabled">MA1</label>
+            <input id="ma-fast-enabled" type="checkbox" checked>
+          </div>
+          <input id="ma-fast-input" type="number" min="1" max="240" value="5" aria-label="MA1周期">
+        </div>
+        <div class="ma-control-row">
+          <div class="check-row">
+            <label for="ma-mid-enabled">MA2</label>
+            <input id="ma-mid-enabled" type="checkbox" checked>
+          </div>
+          <input id="ma-mid-input" type="number" min="1" max="240" value="20" aria-label="MA2周期">
+        </div>
+        <div class="ma-control-row">
+          <div class="check-row">
+            <label for="ma-slow-enabled">MA3</label>
+            <input id="ma-slow-enabled" type="checkbox" checked>
+          </div>
+          <input id="ma-slow-input" type="number" min="1" max="240" value="60" aria-label="MA3周期">
+        </div>
+      </section>
+
+      <section class="workflow-section monitor-controls">
+        <div class="step-heading">
+          <span class="step-badge muted">6</span>
+          <div>
+            <div class="section-title">CTP 监控</div>
+            <strong>本地状态</strong>
+          </div>
+        </div>
+        <details class="advanced-toggle" open>
+          <summary>状态文件</summary>
+          <label for="ctp-state-input">状态 JSON</label>
+          <input id="ctp-state-input" value="output/ctp_realtime_state.json">
+          <label for="ctp-events-input">事件 JSONL</label>
+          <input id="ctp-events-input" value="output/ctp_events.jsonl">
+          <div class="two-col-fields">
+            <div>
+              <label for="ctp-stale-input">过期秒数</label>
+              <input id="ctp-stale-input" type="number" min="0" value="120">
+            </div>
+            <div>
+              <label for="ctp-refresh-interval-input">刷新秒数</label>
+              <input id="ctp-refresh-interval-input" type="number" min="2" value="5">
+            </div>
+          </div>
+          <div class="check-row">
+            <label for="ctp-auto-refresh-input">自动刷新</label>
+            <input id="ctp-auto-refresh-input" type="checkbox" checked>
+          </div>
+        </details>
+        <button class="secondary-button full-width" id="refresh-monitor-button">
+          <i data-lucide="activity"></i><span>刷新监控</span>
+        </button>
+      </section>
+
+      <section class="workflow-section runs-section">
+        <div class="section-title">最近运行</div>
+        <div id="runs-list" class="runs-list"></div>
+      </section>
+    </aside>
+
+    <main class="workspace">
+      <header class="workspace-header">
+        <div>
+          <div class="eyebrow" id="active-mode">回测</div>
+          <h2 id="run-title">行情、回测与监控</h2>
+        </div>
+        <div class="status-pill" id="run-status">空闲</div>
+      </header>
+
+      <section class="summary-strip" aria-label="页面结构">
+        <button class="summary-item active" data-scroll-target="market-panel">
+          <span>行情</span><strong>K线与自选</strong>
+        </button>
+        <button class="summary-item" data-scroll-target="backtest-panel">
+          <span>回测</span><strong>收益与风险</strong>
+        </button>
+        <button class="summary-item" data-scroll-target="result-panel">
+          <span>明细</span><strong>订单和成交</strong>
+        </button>
+        <button class="summary-item" data-scroll-target="monitor-panel">
+          <span>监控</span><strong>CTP状态</strong>
+        </button>
+      </section>
+
+      <section class="kline-section" id="market-panel">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">行情</div>
+            <h3>K线图</h3>
+          </div>
+          <div class="kline-title-tools">
+            <div class="kline-nav" aria-label="K线浏览">
+              <button class="icon-only compact" id="kline-pan-left-button" title="向前">
+                <i data-lucide="chevron-left"></i>
+              </button>
+              <button class="icon-only compact" id="kline-zoom-in-button" title="放大">
+                <i data-lucide="zoom-in"></i>
+              </button>
+              <button class="icon-only compact" id="kline-zoom-out-button" title="缩小">
+                <i data-lucide="zoom-out"></i>
+              </button>
+              <button class="icon-only compact" id="kline-pan-right-button" title="向后">
+                <i data-lucide="chevron-right"></i>
+              </button>
+              <button class="icon-only compact" id="kline-latest-button" title="最新">
+                <i data-lucide="skip-forward"></i>
+              </button>
+            </div>
+            <div class="kline-legend" id="kline-legend"></div>
+            <span id="kline-note">等待合约</span>
+          </div>
+        </div>
+        <canvas id="kline-chart" width="960" height="320"></canvas>
+        <div class="kline-info-strip" id="kline-info-strip"></div>
+      </section>
+
+      <section class="metrics-panel" id="backtest-panel">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">回测</div>
+            <h3>核心指标</h3>
+          </div>
+        </div>
+        <div class="metrics-band" id="metrics-band"></div>
+      </section>
+
+      <section class="chart-section">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">回测</div>
+            <h3>权益曲线</h3>
+          </div>
+          <span id="chart-note">等待运行</span>
+        </div>
+        <canvas id="equity-chart" width="960" height="280"></canvas>
+      </section>
+
+      <section class="table-section" id="result-panel">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">明细</div>
+            <h3>交易记录</h3>
+          </div>
+        </div>
+        <div class="tabs" role="tablist" aria-label="结果表格">
+          <button class="tab active" data-table="orders">订单</button>
+          <button class="tab" data-table="trades">成交</button>
+          <button class="tab" data-table="events">事件</button>
+          <button class="tab" data-table="optimization">优化</button>
+        </div>
+        <div class="table-wrap">
+          <table id="result-table"></table>
+        </div>
+      </section>
+
+      <section class="monitor-section" id="monitor-panel">
+        <div class="section-heading">
+          <div>
+            <div class="panel-kicker">监控</div>
+            <h3>CTP 监控</h3>
+          </div>
+          <div class="monitor-title-status">
+            <span id="ctp-monitor-note">等待状态</span>
+            <div class="health-pill unknown" id="ctp-health-pill">未知</div>
+          </div>
+        </div>
+        <div class="alert-list" id="ctp-alert-list"></div>
+        <div class="monitor-grid" id="ctp-monitor-summary"></div>
+        <div class="connection-strip" id="ctp-connection-strip"></div>
+        <div class="monitor-tables">
+          <div class="monitor-table-block">
+            <div class="block-title">挂单</div>
+            <div class="mini-table-wrap">
+              <table id="ctp-orders-table"></table>
+            </div>
+          </div>
+          <div class="monitor-table-block">
+            <div class="block-title">最新成交</div>
+            <div class="mini-table-wrap">
+              <table id="ctp-trades-table"></table>
+            </div>
+          </div>
+          <div class="monitor-table-block wide">
+            <div class="block-title">最新事件</div>
+            <div class="mini-table-wrap">
+              <table id="ctp-events-table"></table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

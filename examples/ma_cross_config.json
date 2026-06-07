@@ -1,0 +1,32 @@
+{
+  "data": [
+    {
+      "path": "data/sample_multi_bars.csv"
+    }
+  ],
+  "strategy": "sample:ma_cross",
+  "params": {
+    "fast_window": 8,
+    "slow_window": 24,
+    "quantity": 1,
+    "allow_short": false
+  },
+  "engine": {
+    "cash": 100000,
+    "commission_rate": 0.0002,
+    "slippage": 0
+  },
+  "execution": {
+    "default": {
+      "commission_rate": 0.0002,
+      "slippage": 0.01
+    },
+    "symbols": {
+      "SAMPLE_B": {
+        "commission_rate": 0.0003,
+        "slippage": 0.02
+      }
+    }
+  },
+  "output": "output/backtests/phase2_config"
+}

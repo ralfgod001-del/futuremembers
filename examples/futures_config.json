@@ -1,0 +1,53 @@
+{
+  "data": [
+    {
+      "path": "data/futures_rb2405.csv",
+      "symbol": "RB2405"
+    }
+  ],
+  "account": {
+    "mode": "futures",
+    "daily_settlement": true
+  },
+  "contracts": {
+    "RB2405": {
+      "exchange": "SHFE",
+      "multiplier": 10,
+      "tick_size": 1,
+      "margin_rate": 0.12,
+      "commission": {
+        "rate": 0.0001,
+        "close_today_rate": 0.0002,
+        "per_contract": 0,
+        "close_today_per_contract": 1.5,
+        "min_commission": 1
+      }
+    }
+  },
+  "strategy": "sample:ma_cross",
+  "params": {
+    "fast_window": 8,
+    "slow_window": 24,
+    "quantity": 2,
+    "allow_short": true,
+    "symbol": "RB2405"
+  },
+  "execution": {
+    "default": {
+      "slippage": 0.2
+    }
+  },
+  "risk": {
+    "enabled": true,
+    "max_drawdown": 0.2,
+    "default": {
+      "max_order_quantity": 5,
+      "max_position_quantity": 8,
+      "allow_short": true
+    }
+  },
+  "engine": {
+    "cash": 100000
+  },
+  "output": "output/backtests/futures_rb2405"
+}

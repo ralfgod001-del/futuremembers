@@ -1,0 +1,56 @@
+{
+  "ctp": {
+    "broker_id": "9999",
+    "investor_id": "YOUR_INVESTOR_ID",
+    "user_id": "YOUR_USER_ID",
+    "password": "",
+    "front": "tcp://YOUR_TRADE_FRONT:41205",
+    "md_front": "tcp://YOUR_MD_FRONT:41213",
+    "app_id": "simnow_client_test",
+    "auth_code": "0000000000000000",
+    "product_info": "quant_platform",
+    "flow_path": "flow/ctp",
+    "currency_id": "CNY",
+    "transport_module": "",
+    "trader_api_factory": "CreateFtdcTraderApi",
+    "md_transport_module": "",
+    "md_api_factory": "CreateFtdcMdApi",
+    "auth_required": true,
+    "settlement_confirm_required": true,
+    "query_account_on_start": true,
+    "query_positions_on_start": true,
+    "lifecycle_timeout": 5,
+    "wait_for_lifecycle_callbacks": true,
+    "market_data_timeout": 5,
+    "wait_for_market_data_callbacks": true,
+    "query_timeout": 5,
+    "wait_for_query_callbacks": true,
+    "auto_recover_on_front_connected": true,
+    "auto_resubscribe_on_front_connected": true,
+    "watchdog_check_interval": 5,
+    "watchdog_initial_backoff": 1,
+    "watchdog_max_backoff": 30,
+    "watchdog_backoff_multiplier": 2,
+    "watchdog_max_recovery_attempts": 3,
+    "auto_reconcile_after_watchdog_recovery": true
+  },
+  "account": {
+    "mode": "futures",
+    "daily_settlement": true
+  },
+  "contracts": {
+    "RB2405": {
+      "exchange": "SHFE",
+      "multiplier": 10,
+      "tick_size": 1,
+      "margin_rate": 0.12,
+      "commission": {
+        "rate": 0.0001,
+        "close_today_rate": 0.0002,
+        "per_contract": 0,
+        "close_today_per_contract": 1.5,
+        "min_commission": 1
+      }
+    }
+  }
+}

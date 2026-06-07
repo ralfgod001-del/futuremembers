@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+output/
+logs/
+data/*.sqlite
+data/*.sqlite-*
+*.bak
+
+# project-local secrets, never commit
+.env
+.env.*

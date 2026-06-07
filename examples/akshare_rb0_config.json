@@ -1,0 +1,42 @@
+{
+  "data": {
+    "provider": "akshare",
+    "api": "futures_zh_daily_sina",
+    "symbol": "RB0",
+    "start_date": "2024-01-01",
+    "end_date": "2024-12-31",
+    "cache_path": "data/akshare_rb0_daily.csv",
+    "refresh": false
+  },
+  "strategy": "sample:ma_cross",
+  "params": {
+    "fast_window": 5,
+    "slow_window": 20,
+    "quantity": 1
+  },
+  "engine": {
+    "cash": 100000,
+    "commission_rate": 0,
+    "slippage": 0
+  },
+  "account": {
+    "mode": "futures",
+    "daily_settlement": true
+  },
+  "contracts": {
+    "RB0": {
+      "exchange": "SHFE",
+      "multiplier": 10,
+      "tick_size": 1,
+      "margin_rate": 0.12,
+      "commission": {
+        "rate": 0.0001,
+        "close_today_rate": 0.0002,
+        "per_contract": 0,
+        "close_today_per_contract": 1.5,
+        "min_commission": 1
+      }
+    }
+  },
+  "output": "output/backtests/akshare_rb0"
+}

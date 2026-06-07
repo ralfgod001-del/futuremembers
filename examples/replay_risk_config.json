@@ -1,0 +1,37 @@
+{
+  "mode": "replay",
+  "data": [
+    {
+      "path": "data/sample_multi_bars.csv"
+    }
+  ],
+  "strategy": "sample:ma_cross",
+  "params": {
+    "fast_window": 8,
+    "slow_window": 24,
+    "quantity": 3,
+    "allow_short": false
+  },
+  "engine": {
+    "cash": 100000,
+    "commission_rate": 0.0002,
+    "slippage": 0
+  },
+  "execution": {
+    "default": {
+      "commission_rate": 0.0002,
+      "slippage": 0.01
+    }
+  },
+  "risk": {
+    "enabled": true,
+    "max_drawdown": 0.1,
+    "default": {
+      "max_order_quantity": 2,
+      "max_position_quantity": 4,
+      "max_order_notional": 1000,
+      "allow_short": false
+    }
+  },
+  "output": "output/replays/phase3_risk"
+}

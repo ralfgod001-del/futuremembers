@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "path": "data/sample_multi_bars.csv"
+    }
+  ],
+  "strategy": "sample:ma_cross",
+  "params": {
+    "quantity": 1,
+    "allow_short": false
+  },
+  "engine": {
+    "cash": 100000,
+    "commission_rate": 0.0002,
+    "slippage": 0
+  },
+  "optimization": {
+    "objective": "sharpe",
+    "grid": {
+      "fast_window": [5, 8, 10],
+      "slow_window": [20, 24, 30]
+    }
+  },
+  "output": "output/optimizations/phase2_ma_cross"
+}
