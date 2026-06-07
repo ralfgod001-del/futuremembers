@@ -261,6 +261,16 @@ def build_dashboard_html(
     else:
         sidecar_json = None
     data_json = json.dumps(payload, ensure_ascii=False)
+    # Neutralise the </script> break-out vector: json.dumps does not escape
+    # angle brackets, so a member/contract name containing "</script>" would
+    # prematurely close the embedded <script> block. Map "</" -> "<\/" (the
+    # JS parser still reads it as "</") plus the two line separators that are
+    # valid in JSON strings but invalid in JS string literals.
+    data_json = (
+        data_json.replace("</", "<\\/")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
     sidecar_flag = "true" if sidecar_json else "false"
     title = f"上海期货交易所持仓与市场规模看板 {html.escape(latest_date)}"
     out_html = f"""<!doctype html>

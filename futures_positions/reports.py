@@ -596,6 +596,14 @@ def build_report_page(summary: dict[str, Any], ai_summary: str | None = None, ai
         {"summary": summary, "ai_summary": ai_summary, "ai_error": ai_error},
         ensure_ascii=False, indent=2,
     )
+    # Neutralise the </script> break-out vector (see comment above): member
+    # names embedded in this JSON could otherwise terminate the
+    # <script type="application/json"> block.
+    raw_payload = (
+        raw_payload.replace("</", "<\\/")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
 
     safe_product = _html.escape(product)
     safe_product_url = _urlquote(product, safe="")
