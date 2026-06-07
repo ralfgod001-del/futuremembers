@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import logging
 import threading
 import time
 from collections import OrderedDict
@@ -38,6 +39,8 @@ DEFAULT_START_DATE = date(2024, 5, 20)
 
 
 DEFAULT_REPORT_DB = "data/shfe_positions.sqlite"
+
+logger = logging.getLogger(__name__)
 
 # In-memory TTL cache for assembled reports so rapid clicks on "open report"
 # or "save as HTML/JSON" do not re-run the ~30-60s DeepSeek call. The AI call
@@ -340,19 +343,45 @@ def update_incremental(
                 except Exception:
                     pass
             try:
-                data = adapter.fetch(trade_date, http) if ex == "CFFEX" else adapter.fetch_official(trade_date, http)
+                # Use fetch() for every exchange so SHFE benefits from the
+                # akshare fallback (fetch_official-only skipped it before).
+                data = adapter.fetch(trade_date, http)
                 if data.normalized.empty:
+                    database.mark_sync(
+                        trade_date, "no_data", message=f"{ex} positions empty",
+                        source_url=source_url, exchange=ex,
+                    )
                     per["no_data"] += 1
                 else:
                     rows = database.upsert_frame(data.normalized, replace_trade_date=True)
+                    database.mark_sync(
+                        trade_date, "ok", rows_count=rows,
+                        source_url=source_url, exchange=ex,
+                    )
                     per["downloaded"] += 1
                     per["rows"] += rows
             except requests.HTTPError as exc:
-                if exc.response is not None and exc.response.status_code == 404:
+                status_code = exc.response.status_code if exc.response is not None else None
+                if status_code == 404:
+                    database.mark_sync(
+                        trade_date, "no_data", message=f"{ex} 404", exchange=ex,
+                    )
                     per["no_data"] += 1
                 else:
+                    database.mark_sync(
+                        trade_date, "error", message=f"HTTP {status_code}: {exc}",
+                        source_url=source_url, exchange=ex,
+                    )
                     per["errors"] += 1
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "%s positions fetch failed for %s: %s",
+                    ex, trade_date.isoformat(), exc, exc_info=True,
+                )
+                database.mark_sync(
+                    trade_date, "error", message=f"{type(exc).__name__}: {exc}",
+                    source_url=source_url, exchange=ex,
+                )
                 per["errors"] += 1
             if pause:
                 time.sleep(pause)
@@ -470,22 +499,45 @@ def update_market_incremental(
             try:
                 market, url = fetch_cffex(trade_date, http)
                 if market.empty:
+                    database.mark_market_sync(
+                        trade_date, "no_data", message="CFFEX rtj empty",
+                        source_url=url, exchange="CFFEX",
+                    )
                     cffex_stat["no_data"] += 1
                 else:
                     # CFFEX rtj has no margin feed, so synthesize settlement
                     # params from the standard exchange-level margin rates.
                     settlement = build_cffex_settlement_frame(market, source_url=url)
                     counts = database.upsert_market_day(market, settlement, replace_trade_date=True)
+                    database.mark_market_sync(
+                        trade_date, "ok", market_rows=counts["market_rows"],
+                        settlement_rows=counts.get("settlement_rows", 0),
+                        source_url=url, exchange="CFFEX",
+                    )
                     cffex_stat["downloaded"] += 1
                     cffex_stat["market_rows"] += counts["market_rows"]
                     cffex_stat.setdefault("settlement_rows", 0)
                     cffex_stat["settlement_rows"] += counts.get("settlement_rows", 0)
             except requests.HTTPError as exc:
-                if exc.response is not None and exc.response.status_code == 404:
+                status_code = exc.response.status_code if exc.response is not None else None
+                if status_code == 404:
+                    database.mark_market_sync(
+                        trade_date, "no_data", message="CFFEX rtj 404", exchange="CFFEX",
+                    )
                     cffex_stat["no_data"] += 1
                 else:
+                    database.mark_market_sync(
+                        trade_date, "error", message=f"HTTP {status_code}: {exc}", exchange="CFFEX",
+                    )
                     cffex_stat["errors"] += 1
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "CFFEX market fetch failed for %s: %s",
+                    trade_date.isoformat(), exc, exc_info=True,
+                )
+                database.mark_market_sync(
+                    trade_date, "error", message=f"{type(exc).__name__}: {exc}", exchange="CFFEX",
+                )
                 cffex_stat["errors"] += 1
             # CFFEX rate-limit: ≥1s between requests.
             time.sleep(max(1.0, pause_seconds))

@@ -323,13 +323,21 @@ class CFFEXAdapter(BaseAdapter):
             url = self.base_url.format(ym=ym, day=day, product=product)
             try:
                 text = get_text(s, url, encoding="utf-8")
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "CFFEX %s positions download failed for %s (%s)",
+                    product, trade_date.isoformat(), exc,
+                )
                 continue
             try:
                 frame = parse_cffex_position_xml(text, trade_date, product, url)
-            except Exception:
-                # HTML fallback for older CFFEX layouts: keep the generic
-                # normalizer as a last resort so we never lose a day.
+            except Exception as exc:
+                # XML parse failed: try the generic HTML-table normalizer as a
+                # last resort for older CFFEX layouts so we never lose a day.
+                logger.debug(
+                    "CFFEX %s positions XML parse failed for %s, trying HTML fallback (%s)",
+                    product, trade_date.isoformat(), exc,
+                )
                 stripped = text.strip()
                 if stripped.startswith("<"):
                     continue

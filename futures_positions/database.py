@@ -734,6 +734,12 @@ class PositionsDatabase:
                     "SELECT status, COUNT(*) AS count FROM sync_status GROUP BY status"
                 )
             }
+            sync_by_exchange: dict[str, dict[str, int]] = {}
+            for item in connection.execute(
+                "SELECT exchange, status, COUNT(*) AS count "
+                "FROM sync_status GROUP BY exchange, status"
+            ):
+                sync_by_exchange.setdefault(item["exchange"], {})[item["status"]] = item["count"]
             market = connection.execute(
                 """
                 SELECT
@@ -752,10 +758,18 @@ class PositionsDatabase:
                     "SELECT status, COUNT(*) AS count FROM market_sync_status GROUP BY status"
                 )
             }
+            market_sync_by_exchange: dict[str, dict[str, int]] = {}
+            for item in connection.execute(
+                "SELECT exchange, status, COUNT(*) AS count "
+                "FROM market_sync_status GROUP BY exchange, status"
+            ):
+                market_sync_by_exchange.setdefault(item["exchange"], {})[item["status"]] = item["count"]
         result = dict(row)
         result["sync_status"] = statuses
+        result["sync_status_by_exchange"] = sync_by_exchange
         result["market"] = dict(market)
         result["market"]["sync_status"] = market_statuses
+        result["market"]["sync_status_by_exchange"] = market_sync_by_exchange
         result["database"] = str(self.path.resolve())
         result["size_bytes"] = self.path.stat().st_size if self.path.exists() else 0
         return result

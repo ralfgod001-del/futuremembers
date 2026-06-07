@@ -224,6 +224,85 @@ class PositionsSystemTest(unittest.TestCase):
             self.assertEqual(result["downloaded"], 1)
             self.assertEqual(database.status()["market"]["trading_days"], 2)
 
+    def test_positions_no_data_is_marked_and_stops_retrying(self):
+        """A CFFEX-style adapter returning empty data must record a no_data
+        mark in sync_status so the date stops being retried once attempts
+        reach the cap. Before this fix the positions flow never wrote a
+        mark, so no_data dates were retried forever (attempts stayed 0)."""
+        class FakeEmptyCFFEX:
+            exchange = "CFFEX"
+            base_url = "http://example.test/{date}.xml"
+
+            def fetch(self, trade_date, http):
+                return ExchangeData("CFFEX", pd.DataFrame())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            database = PositionsDatabase(Path(tmp) / "positions.sqlite")
+            adapter = FakeEmptyCFFEX()
+            r1 = update_incremental(
+                database,
+                date(2026, 1, 5),
+                date(2026, 1, 5),
+                pause_seconds=0,
+                adapters=[adapter],
+                http=object(),
+                trading_days={"20260105"},
+            )
+            self.assertEqual(r1["no_data"], 1)
+            self.assertEqual(r1["per_exchange"]["CFFEX"]["no_data"], 1)
+            # A no_data mark must now exist for CFFEX on that date.
+            with database.session() as con:
+                row = con.execute(
+                    "SELECT exchange, status, attempts FROM sync_status WHERE trade_date=?",
+                    ("2026-01-05",),
+                ).fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(tuple(row), ("CFFEX", "no_data", 1))
+            # Bring attempts to the default cap (3); the date is then excluded
+            # from missing_weekdays_for_exchange -> no more retries.
+            for _ in range(2):
+                database.mark_sync("2026-01-05", "no_data", exchange="CFFEX")
+            missing = database.missing_weekdays_for_exchange(
+                date(2026, 1, 5),
+                date(2026, 1, 5),
+                exchange="CFFEX",
+                trading_days={"20260105"},
+            )
+            self.assertEqual(missing, [])
+
+    def test_positions_success_writes_ok_mark_with_rowcount(self):
+        """A successful positions download records an ok mark carrying the
+        inserted row count so status() reflects per-exchange health."""
+        class FakeOkCFFEX:
+            exchange = "CFFEX"
+            base_url = "http://example.test/{date}.xml"
+
+            def fetch(self, trade_date, http):
+                frame = position_rows(trade_date.isoformat(), "MM", 10, 8)
+                frame["exchange"] = "CFFEX"
+                return ExchangeData("CFFEX", frame)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            database = PositionsDatabase(Path(tmp) / "positions.sqlite")
+            adapter = FakeOkCFFEX()
+            r = update_incremental(
+                database,
+                date(2026, 1, 5),
+                date(2026, 1, 5),
+                pause_seconds=0,
+                adapters=[adapter],
+                http=object(),
+                trading_days={"20260105"},
+            )
+            self.assertEqual(r["downloaded"], 1)
+            self.assertGreater(r["rows"], 0)
+            with database.session() as con:
+                row = con.execute(
+                    "SELECT exchange, status, rows_count FROM sync_status WHERE trade_date=?",
+                    ("2026-01-05",),
+                ).fetchone()
+            self.assertEqual(tuple(row), ("CFFEX", "ok", r["rows"]))
+
 
 if __name__ == "__main__":
     unittest.main()
